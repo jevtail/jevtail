@@ -4,6 +4,7 @@ import { Hono } from "hono";
 import { ingest, jevClient, validateRules, migrate, defaultShouldAlert, defaultRules, type Store, type Rules, type Event, type JudgedEvent } from "@jevtail/core";
 import { RECEIVERS } from "@jevtail/receivers";
 import { sinksFromEnv, type Sink } from "@jevtail/sinks";
+import { mcpHandler } from "./mcp";
 
 export interface Env {
   TYPESAFE_API_KEY: string;
@@ -38,7 +39,7 @@ export function createApp(deps: Deps) {
   const ready = migrate(store);
   const app = new Hono();
 
-  app.get("/", (c) => c.text("jevtail: POST /in/{generic|sentry|vercel|supabase}?token=...  GET /events  GET /templates  GET /health\n"));
+  app.get("/", (c) => c.text("jevtail: POST /in/{generic|sentry|vercel|supabase}?token=...  GET /events  GET /templates  GET /health  MCP at /mcp\n"));
   app.get("/health", async (c) => { await ready; return c.json({ ok: true, rules: Object.keys(rules), sinks: sinks.length }); });
 
   const auth = (c: any): string | null => {
@@ -69,6 +70,10 @@ export function createApp(deps: Deps) {
     const r = await ingestEvents(events);
     return c.json({ received: r.received, judged: r.judged, alerts: r.alerts.length, tokens: r.tokens });
   });
+
+  // MCP (Streamable HTTP) for agents: same token, same data.
+  const mcp = mcpHandler({ store, jev, rules, ingest: ingestEvents });
+  app.all("/mcp", async (c) => (auth(c) ? mcp(c) : c.json({ error: "bad token" }, 401)));
 
   app.get("/events", async (c) => {
     if (!auth(c)) return c.json({ error: "bad token" }, 401);

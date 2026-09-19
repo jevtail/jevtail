@@ -1,4 +1,15 @@
 {
-  "name": "@jevtail/server", "version": "0.1.0", "type": "module", "private": true,
-  "dependencies": { "hono": "^4.9.0", "@jevtail/core": "workspace:*", "@jevtail/receivers": "workspace:*", "@jevtail/sinks": "workspace:*" }
+  "name": "@jevtail/server",
+  "version": "0.1.0",
+  "type": "module",
+  "private": true,
+  "dependencies": {
+    "@hono/mcp": "^0.3.2",
+    "@jevtail/core": "workspace:*",
+    "@jevtail/receivers": "workspace:*",
+    "@jevtail/sinks": "workspace:*",
+    "@modelcontextprotocol/sdk": "^1.30.0",
+    "hono": "^4.9.0",
+    "zod": "^4.6.5"
+  }
 }

@@ -115,10 +115,34 @@ Pipes work too: `kubectl logs -f api | curl -s -X POST --data-binary @- "localho
 GET /events?since=<epoch ms>&limit=100&token=...   # judged events, newest first
 GET /templates?token=...                            # templates with counts and judgments
 GET /health
+POST /mcp                                           # MCP, see below
 ```
 
 Every event carries its judgment, so `jq '.[] | select(.judgment.category.choice=="dependency")'`
 is your incident filter.
+
+## Agents: MCP built in
+
+The same server speaks MCP (Streamable HTTP) at `/mcp`, so an incident agent does not need
+its own log plumbing. Anything that talks MCP can use it: Claude Code, Cursor, Strands
+Agents, LangChain / LangGraph, the official SDKs.
+
+```bash
+claude mcp add --transport http jevtail https://<host>/mcp --header "Authorization: Bearer <JEVTAIL_TOKEN>"
+```
+
+| Tool | What it answers |
+| --- | --- |
+| `jevtail_stats` | "What's the situation in the last hour?" counts by source / category / severity, recent alerts, worst templates |
+| `jevtail_alerts` | "What crossed the line since last night?" |
+| `jevtail_events` | filtered drill-down: source, level, category, min severity, text |
+| `jevtail_templates` / `jevtail_template` | the shape of the traffic, and one template with sample messages and links |
+| `jevtail_judge` | score log lines the agent found elsewhere, without storing them |
+| `jevtail_ingest` | push events the agent fetched from a system jevtail is not wired to |
+
+The split is deliberate: Jev does the thousands of cheap judgments, the agent (an LLM) reads
+the handful that matter and explains or fixes. A Strands or LangGraph agent with just these
+tools can answer "did the deploy at 14:02 break anything?" in one or two calls.
 
 ## Your own rules
 
