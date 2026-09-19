@@ -1,0 +1,2 @@
+{ "name": "@jevtail/core", "version": "0.1.0", "type": "module", "main": "src/index.ts",
+  "exports": { ".": "./src/index.ts", "./store-bun": "./src/store-bun.ts" }, "license": "MIT" }

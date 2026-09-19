@@ -1,0 +1,8 @@
+services:
+  jevtail:
+    build: { context: .., dockerfile: deploy/Dockerfile }
+    ports: ["8787:8787"]
+    volumes: ["jevtail-data:/data"]
+    env_file: [../.env]
+volumes:
+  jevtail-data:

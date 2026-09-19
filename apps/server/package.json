@@ -1,0 +1,4 @@
+{
+  "name": "@jevtail/server", "version": "0.1.0", "type": "module", "private": true,
+  "dependencies": { "hono": "^4.9.0", "@jevtail/core": "workspace:*", "@jevtail/receivers": "workspace:*", "@jevtail/sinks": "workspace:*" }
+}

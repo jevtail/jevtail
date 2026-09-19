@@ -1,0 +1,14 @@
+{
+  "compilerOptions": {
+    "target": "ES2022", "module": "ESNext", "moduleResolution": "bundler",
+    "strict": true, "skipLibCheck": true, "noEmit": true,
+    "types": ["bun-types", "@cloudflare/workers-types"],
+    "paths": {
+      "@jevtail/core": ["./packages/core/src/index.ts"],
+      "@jevtail/core/store-bun": ["./packages/core/src/store-bun.ts"],
+      "@jevtail/receivers": ["./packages/receivers/src/index.ts"],
+      "@jevtail/sinks": ["./packages/sinks/src/index.ts"]
+    }
+  },
+  "include": ["packages/*/src", "packages/*/test", "apps/*/src"]
+}

@@ -1,0 +1,20 @@
+{
+  "name": "jevtail-monorepo",
+  "private": true,
+  "workspaces": ["packages/*", "apps/*"],
+  "scripts": {
+    "dev": "bun --watch apps/server/src/bun.ts",
+    "start": "bun apps/server/src/bun.ts",
+    "test": "bun test",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "worker:dev": "wrangler dev --config deploy/wrangler.toml",
+    "worker:deploy": "wrangler deploy --config deploy/wrangler.toml"
+  },
+  "devDependencies": {
+    "@cloudflare/workers-types": "^4",
+    "bun-types": "^1.3.5",
+    "typescript": "^5.7.0",
+    "wrangler": "^4"
+  },
+  "license": "MIT"
+}

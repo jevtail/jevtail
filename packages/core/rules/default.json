@@ -1,0 +1,9 @@
+{
+  "is_failure":  { "type": "noul",  "instructions": "Does this event describe a failure that a user of the application would notice (errors, crashes, timeouts, failed requests)? Routine info logs, successful requests and expected warnings are not failures." },
+  "needs_human": { "type": "noul",  "instructions": "Would an on-call engineer need to look at this now, rather than it being noise, expected behaviour, or something that resolves itself?" },
+  "severity":    { "type": "score", "instructions": "Operational severity of this event.",
+                   "criteria": ["noise or expected", "minor: degraded for few users or self-healing", "major: a feature is broken for many users", "critical: the service is down, data is lost, or security is breached"] },
+  "category":    { "type": "choice", "instructions": "What kind of failure is this?",
+                   "criteria": { "timeout": "timeouts, slow upstreams, deadlines exceeded", "dependency": "a database, queue, cache or third-party API failed", "auth": "authentication or authorization failures", "resource": "out of memory, disk, file handles, rate limits", "bug": "an exception or logic error in application code", "deploy": "build, config or deployment problems", "security": "attacks, credential misuse, injection attempts", "other": "none of the above or not a failure" } },
+  "security":    { "type": "noul",  "instructions": "Does this event indicate an attack, credential misuse, or an injection attempt?" }
+}
