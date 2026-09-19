@@ -20,7 +20,18 @@ export const defaultShouldAlert: PipelineConfig["shouldAlert"] = (j) =>
 
 export interface IngestResult { received: number; judged: number; tokens: number; alerts: JudgedEvent[] }
 
-export async function ingest(events: Event[], deps: { store: Store; jev: JevClient; config: PipelineConfig }): Promise<IngestResult> {
+// ponytail: one in-process queue per tenant so two webhooks for the same template cannot
+// both see "new template" and alert twice. Move to a DB-level lock for multi-instance deploys.
+const queues = new Map<string, Promise<unknown>>();
+export function ingest(events: Event[], deps: { store: Store; jev: JevClient; config: PipelineConfig }): Promise<IngestResult> {
+  const tenant = events[0]?.tenant ?? "default";
+  const prev = queues.get(tenant) ?? Promise.resolve();
+  const run = prev.catch(() => {}).then(() => ingestUnlocked(events, deps));
+  queues.set(tenant, run);
+  return run;
+}
+
+async function ingestUnlocked(events: Event[], deps: { store: Store; jev: JevClient; config: PipelineConfig }): Promise<IngestResult> {
   const { store, jev, config } = deps;
   if (!events.length) return { received: 0, judged: 0, tokens: 0, alerts: [] };
   const now = Date.now();

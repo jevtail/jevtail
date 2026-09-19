@@ -77,3 +77,15 @@ test("mask handles numbers after underscores and inside identifiers", () => {
   expect(mask("container api-7f9c killed")).toBe(mask("container api-7f9c killed"));
   expect(mask("Warp server error19/Sep/2026:05:32:24 +0000: x")).toBe(mask("Warp server error18/Sep/2026:23:01:07 +0000: x"));
 });
+
+test("ingest serializes concurrent requests so a racing duplicate alerts once", async () => {
+  const store = await bunSqlite(":memory:");
+  await migrate(store);
+  const { client } = fakeJev();
+  const config = { rules: validateRules(defaultRules), rejudgeAfterMs: 3_600_000, alertCooldownMs: 3_600_000, shouldAlert: defaultShouldAlert };
+  const [a, b] = await Promise.all([
+    ingest([ev(1, "Timeout waiting for pg after 100ms")], { store, jev: client, config }),
+    ingest([ev(2, "Timeout waiting for pg after 200ms")], { store, jev: client, config }),
+  ]);
+  expect(a.alerts.length + b.alerts.length).toBe(1);
+});
