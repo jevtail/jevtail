@@ -26,6 +26,8 @@ export const sentry: Receiver = (body, _h, tenant) => {
   const issue = b?.data?.issue ?? b?.issue;
   const e = b?.data?.event ?? b?.event ?? issue ?? b;
   if (!e) return [];
+  // issue lifecycle webhooks: only new / reopened issues are failures; resolved, ignored, assigned are bookkeeping
+  if (b?.action && !["created", "unresolved", "triggered", "reappeared", "regressed"].includes(String(b.action))) return [];
   const tags: Record<string, string> = Array.isArray(e.tags) ? Object.fromEntries(e.tags.map((t: any) => Array.isArray(t) ? t : [t?.key, t?.value])) : (e.tags ?? {});
   const exc = e.exception?.values?.[0];
   const title = str(e.title ?? issue?.title ?? e.message ?? e.logentry?.formatted ?? (exc ? `${exc.type}: ${exc.value}` : "sentry event"));

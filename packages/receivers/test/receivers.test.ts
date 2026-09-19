@@ -63,3 +63,12 @@ test("sentry: issue counts, tag arrays, culprit appended to message", () => {
   expect(e.message).toBe("TypeError: Cannot read properties of undefined (reading 'filter') (at /)");
   expect(e.meta).toMatchObject({ project: "ophiliapicture", environment: "production", handled: "no", events: 2325, users: 45, issue: "OPHILIAPICTURE-W", issue_category: "error", url: "https://www.ophiliapicture.com/" });
 });
+
+test("sentry: resolved / assigned / ignored issue webhooks are skipped", () => {
+  const mk = (action: string) => ({ action, data: { issue: { shortId: "X-1", title: "boom", level: "error", web_url: "https://s/x" } } });
+  expect(sentry(mk("resolved"), h, "t")).toHaveLength(0);
+  expect(sentry(mk("assigned"), h, "t")).toHaveLength(0);
+  expect(sentry(mk("ignored"), h, "t")).toHaveLength(0);
+  expect(sentry(mk("created"), h, "t")).toHaveLength(1);
+  expect(sentry(mk("unresolved"), h, "t")).toHaveLength(1);
+});
