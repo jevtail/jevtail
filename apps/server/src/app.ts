@@ -16,6 +16,9 @@ export interface Env {
   TELEGRAM_BOT_TOKEN?: string; TELEGRAM_CHAT_ID?: string;
   SLACK_WEBHOOK_URL?: string; DISCORD_WEBHOOK_URL?: string; ALERT_WEBHOOK_URL?: string;
   JEVTAIL_STDOUT?: string;
+  // Bun-only pull sources (see sources.ts)
+  JEVTAIL_TAIL?: string; JEVTAIL_DOCKER?: string; JEVTAIL_DOCKER_BIN?: string;
+  SUPABASE_ACCESS_TOKEN?: string; SUPABASE_PROJECTS?: string; SUPABASE_POLL_SEC?: string;
 }
 
 export interface Deps { store: Store; env: Env; fetchImpl?: typeof fetch; sinks?: Sink[] }
@@ -44,6 +47,14 @@ export function createApp(deps: Deps) {
     return t === env.JEVTAIL_TOKEN ? "default" : null; // ponytail: one tenant per token; map tokens -> tenants here for multi-tenant
   };
 
+  /** ingest from non-HTTP sources (tail, docker, pollers) with the same rules, store and sinks */
+  const ingestEvents = async (events: Event[]) => {
+    await ready;
+    const r = await ingest(events, { store, jev, config });
+    if (r.alerts.length) await Promise.all(sinks.map((s) => s(r.alerts).catch((e) => console.error("sink failed:", e.message))));
+    return r;
+  };
+
   app.post("/in/:receiver", async (c) => {
     const tenant = auth(c);
     if (!tenant) return c.json({ error: "bad token" }, 401);
@@ -55,9 +66,7 @@ export function createApp(deps: Deps) {
     try { body = JSON.parse(raw); } catch { /* ndjson or plain text: receivers handle strings */ }
     let events: Event[];
     try { events = recv(body, c.req.raw.headers, tenant); } catch (e) { return c.json({ error: `parse: ${(e as Error).message}` }, 400); }
-    await ready;
-    const r = await ingest(events, { store, jev, config });
-    if (r.alerts.length) await Promise.all(sinks.map((s) => s(r.alerts).catch((e) => console.error("sink failed:", e.message))));
+    const r = await ingestEvents(events);
     return c.json({ received: r.received, judged: r.judged, alerts: r.alerts.length, tokens: r.tokens });
   });
 
@@ -77,7 +86,7 @@ export function createApp(deps: Deps) {
     return c.json(rows.map(parseRow));
   });
 
-  return app;
+  return Object.assign(app, { ingest: ingestEvents });
 }
 
 function parseRow(r: Record<string, unknown>) {
