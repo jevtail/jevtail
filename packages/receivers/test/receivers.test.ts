@@ -37,3 +37,18 @@ test("supabase: batch with metadata", () => {
   const [e] = supabase([{ id: "1", timestamp: 1758240000000000, event_message: "connection reset by peer", metadata: { level: "error", project: "abc" } }], h, "t");
   expect(e.source).toBe("supabase"); expect(e.level).toBe("error"); expect(e.meta?.project).toBe("abc");
 });
+
+test("supabase: unified logs rows with flattened attributes, zone-less UTC timestamps, json auth messages", () => {
+  const rows = [
+    { timestamp: "2026-09-19T05:32:24.503132", source: "postgrest_logs", event_message: "Warp server error: Thread killed by timeout manager", log_attributes: { host: "db-abc", project: "abc" } },
+    { timestamp: "2026-09-19T03:22:07.430000", source: "postgres_logs", event_message: "checkpoint complete: wrote 31 buffers", log_attributes: { "parsed.error_severity": "LOG", "parsed.sql_state_code": "00000", project: "abc" } },
+    { timestamp: "2026-09-19T04:57:47.494000", source: "edge_logs", event_message: "GET | 500 | https://abc.supabase.co/rest/v1/users?select=name | node", log_attributes: { project: "abc" } },
+    { timestamp: "2026-09-19T04:57:47.000000", source: "auth_logs", event_message: '{"component":"api","level":"error","method":"POST","msg":"request failed","path":"/token","error":"invalid_grant"}', log_attributes: { level: "error", method: "POST", path: "/token" } },
+  ];
+  const ev = supabase(rows, h, "t");
+  expect(ev.map((e) => e.source)).toEqual(["supabase:postgrest", "supabase:postgres", "supabase:edge", "supabase:auth"]);
+  expect(ev[0].level).toBe("error"); expect(ev[0].ts).toBe(Date.parse("2026-09-19T05:32:24.503Z"));
+  expect(ev[1].level).toBe("info"); expect(ev[1].meta?.sql_state).toBe("00000");
+  expect(ev[2].level).toBe("error"); expect(ev[2].meta?.status).toBe(500); expect(ev[2].meta?.path).toBe("/rest/v1/users");
+  expect(ev[3].message).toBe("request failed POST /token invalid_grant"); expect(ev[3].level).toBe("error");
+});

@@ -47,16 +47,37 @@ export const vercel: Receiver = (body, _h, tenant) => {
   });
 };
 
-/** Supabase Log Drain (HTTP). Batches of {id, timestamp, event_message, metadata}. ponytail: shape from docs, verify against a real drain. */
+/**
+ * Supabase logs: the HTTP Log Drain, the Management/MCP unified `logs` rows, and Logflare-style
+ * batches all reduce to {timestamp, source?, event_message, log_attributes | metadata}.
+ * Attributes may be nested or dot-flattened ("parsed.error_severity"); both are read.
+ */
 export const supabase: Receiver = (body, _h, tenant) => {
-  const items: any[] = Array.isArray(body) ? body : (body as any)?.logs ?? [body];
-  return items.filter((x) => x && typeof x === "object").map((x) => ({
-    id: String(x.id ?? uid()), tenant, source: "supabase", ts: tsOf(x.timestamp),
-    level: levelOf(x.metadata?.level ?? x.metadata?.severity ?? x.level, /error|fatal|exception/i.test(String(x.event_message)) ? "error" : "info"),
-    message: str(x.event_message ?? x.message ?? x),
-    meta: { project: x.metadata?.project ?? x.project, component: x.metadata?.component ?? x.source ?? x.metadata?.host, status: x.metadata?.response?.status_code },
-  }));
+  const b = body as any;
+  const items: any[] = Array.isArray(b) ? b : b?.logs ?? b?.result ?? b?.events ?? [b];
+  return items.filter((x) => x && typeof x === "object").map((x) => {
+    let a: any = x.log_attributes ?? x.metadata ?? {};
+    if (typeof a === "string") { try { a = JSON.parse(a); } catch { a = {}; } }
+    const get = (k: string) => a[k] ?? k.split(".").reduce((o: any, p) => o?.[p], a);
+    const stream = String(x.source ?? get("source") ?? "").replace(/_logs$/, "");
+    let message = str(x.event_message ?? x.message ?? x);
+    let parsed: any = null;
+    if (message.startsWith("{")) { try { parsed = JSON.parse(message); } catch { /* not json */ } }
+    if (parsed?.msg) message = [parsed.msg, parsed.method, parsed.path, parsed.error].filter(Boolean).join(" ");
+    const edge = /^(\w+) \| (\d{3}) \| (\S+)/.exec(message);              // edge_logs: "GET | 500 | https://... | node"
+    const status = Number(get("response.status_code") ?? get("status_code") ?? edge?.[2] ?? parsed?.status);
+    const rawLevel = get("level") ?? get("parsed.error_severity") ?? parsed?.level;
+    const level = rawLevel ? levelOf(rawLevel) : status >= 500 ? "error" : status >= 400 ? "warn"
+      : /error|fatal|panic|exception|killed|timeout/i.test(message) ? "error" : "info";
+    return {
+      id: String(x.id ?? uid()), tenant, source: stream ? `supabase:${stream}` : "supabase", ts: tsOf(x.timestamp), level, message,
+      meta: pick({ project: get("project") ?? x.project, component: get("component") ?? parsed?.component, host: get("host"),
+        method: get("method") ?? parsed?.method ?? edge?.[1], path: get("path") ?? parsed?.path ?? (edge?.[3] ? safePath(edge[3]) : undefined),
+        status: Number.isFinite(status) ? status : undefined, sql_state: get("parsed.sql_state_code") }, ["project", "component", "host", "method", "path", "status", "sql_state"]),
+    };
+  });
 };
+function safePath(u: string) { try { return new URL(u).pathname; } catch { return u; } }
 
 export const RECEIVERS: Record<string, Receiver> = { generic, sentry, vercel, supabase };
 

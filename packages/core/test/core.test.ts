@@ -75,4 +75,5 @@ test("ingest judges one sample per template, alerts once, respects cooldown", as
 test("mask handles numbers after underscores and inside identifiers", () => {
   expect(mask("rate limit hit for key ak_74152513 (429)")).toBe(mask("rate limit hit for key ak_31790077 (429)"));
   expect(mask("container api-7f9c killed")).toBe(mask("container api-7f9c killed"));
+  expect(mask("Warp server error19/Sep/2026:05:32:24 +0000: x")).toBe(mask("Warp server error18/Sep/2026:23:01:07 +0000: x"));
 });
