@@ -17,20 +17,34 @@ export const generic: Receiver = (body, _h, tenant) => {
   }));
 };
 
-/** Sentry issue-alert / internal-integration webhooks. Takes both `data.event` (integrations) and legacy top-level `event`. */
+/**
+ * Sentry issue-alert and internal-integration webhooks. Reads `data.event` (integrations),
+ * legacy top-level `event`, and `data.issue` for counts. Tags may be [[k,v],...] or an object.
+ */
 export const sentry: Receiver = (body, _h, tenant) => {
   const b = body as any;
-  const e = b?.data?.event ?? b?.event ?? b?.data?.issue ?? b;
+  const issue = b?.data?.issue ?? b?.issue;
+  const e = b?.data?.event ?? b?.event ?? issue ?? b;
   if (!e) return [];
-  const message = str(e.title ?? e.message ?? e.logentry?.formatted ?? e.culprit ?? "sentry event");
-  const link = e.web_url ?? b?.data?.issue?.web_url ?? b?.url;
+  const tags: Record<string, string> = Array.isArray(e.tags) ? Object.fromEntries(e.tags.map((t: any) => Array.isArray(t) ? t : [t?.key, t?.value])) : (e.tags ?? {});
+  const exc = e.exception?.values?.[0];
+  const title = str(e.title ?? issue?.title ?? e.message ?? e.logentry?.formatted ?? (exc ? `${exc.type}: ${exc.value}` : "sentry event"));
+  const culprit = e.culprit ?? issue?.culprit ?? tags.transaction;
+  const message = culprit && !title.includes(culprit) ? `${title} (at ${culprit})` : title;
+  const link = e.web_url ?? issue?.web_url ?? issue?.permalink ?? b?.url;
   return [{
-    id: uid(), tenant, source: "sentry", ts: tsOf(e.datetime ?? e.timestamp ?? b?.data?.issue?.lastSeen), level: levelOf(e.level ?? b?.level, "error"),
+    id: String(e.event_id ?? e.id ?? uid()), tenant, source: "sentry",
+    ts: tsOf(e.datetime ?? e.timestamp ?? issue?.lastSeen), level: levelOf(e.level ?? tags.level ?? issue?.level ?? b?.level, "error"),
     message, link,
-    meta: { project: b?.project ?? b?.data?.issue?.project?.slug, environment: e.environment, release: e.release, action: b?.action, culprit: e.culprit,
-      exception: str(e.exception?.values?.[0]?.value ?? e.exception?.values?.[0]?.type, 300) || undefined },
+    meta: pick({
+      project: b?.project ?? issue?.project?.slug ?? b?.data?.issue?.project?.slug, environment: e.environment ?? tags.environment, release: e.release ?? tags.release,
+      action: b?.action, issue: issue?.shortId, issue_category: issue?.issueCategory ?? issue?.category, issue_type: issue?.issueType ?? issue?.type,
+      events: num(issue?.count), users: num(issue?.userCount), url: tags.url, handled: tags.handled, mechanism: tags.mechanism,
+      exception: str(exc?.value ?? exc?.type, 300) || undefined, platform: e.platform ?? issue?.platform,
+    }, ["project", "environment", "release", "action", "issue", "issue_category", "issue_type", "events", "users", "url", "handled", "mechanism", "exception", "platform"]),
   }];
 };
+const num = (v: unknown) => (v == null || v === "" || Number.isNaN(Number(v)) ? undefined : Number(v));
 
 /** Vercel Log Drain (json or ndjson format). Level from `level`, else 5xx -> error, 4xx -> warn. */
 export const vercel: Receiver = (body, _h, tenant) => {

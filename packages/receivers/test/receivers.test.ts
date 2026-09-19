@@ -52,3 +52,14 @@ test("supabase: unified logs rows with flattened attributes, zone-less UTC times
   expect(ev[2].level).toBe("error"); expect(ev[2].meta?.status).toBe(500); expect(ev[2].meta?.path).toBe("/rest/v1/users");
   expect(ev[3].message).toBe("request failed POST /token invalid_grant"); expect(ev[3].level).toBe("error");
 });
+
+test("sentry: issue counts, tag arrays, culprit appended to message", () => {
+  const body = { action: "created", data: {
+    event: { event_id: "8a3c", title: "TypeError: Cannot read properties of undefined (reading 'filter')", level: "error", datetime: "2026-09-17T13:41:39.679Z", web_url: "https://minkyu.sentry.io/issues/OPHILIAPICTURE-W", culprit: "/", platform: "javascript",
+      tags: [["environment", "production"], ["handled", "no"], ["mechanism", "onunhandledrejection"], ["url", "https://www.ophiliapicture.com/"], ["release", "cDAH1jKL"]] },
+    issue: { shortId: "OPHILIAPICTURE-W", count: "2325", userCount: 45, issueCategory: "error", issueType: "error", project: { slug: "ophiliapicture" } } } };
+  const [e] = sentry(body, h, "t");
+  expect(e.id).toBe("8a3c");
+  expect(e.message).toBe("TypeError: Cannot read properties of undefined (reading 'filter') (at /)");
+  expect(e.meta).toMatchObject({ project: "ophiliapicture", environment: "production", handled: "no", events: 2325, users: 45, issue: "OPHILIAPICTURE-W", issue_category: "error", url: "https://www.ophiliapicture.com/" });
+});

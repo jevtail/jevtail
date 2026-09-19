@@ -141,10 +141,19 @@ Adding a receiver is one function that maps a payload to `Event[]` and one line 
 
 ## Status
 
-Early. Sentry and Vercel payloads are tested against documented shapes; the Supabase
-drain shape has not yet been verified against a live drain. Jev is in early access.
-Judgments are probabilities: run in shadow mode (stdout sink) for a day and read
-`/templates` before trusting the thresholds on your traffic.
+Early, but checked against real data (2026-09-19):
+
+- **Supabase**: 240 unified-log rows from two live projects (edge, supavisor, postgrest, postgres,
+  auth) collapsed into 16 templates and 2 Jev requests; the one anomaly (PostgREST
+  "Thread killed by timeout manager") was judged minor/timeout, below the alert line, which is right.
+- **Sentry**: 10 real unresolved issues rebuilt as issue-alert webhooks; the 45-user TypeError
+  scored highest (major/bug), single-user client network errors stayed below the line.
+- **Vercel**: parsed against the documented drain shape only.
+
+Jev is in early access. Judgments are probabilities: run in shadow mode (stdout sink) for a
+day and read `/templates` before trusting the thresholds on your traffic. Sentry issues are
+already grouped, so most new issues clear the line; raise `needs_human` in a custom rule set
+if that is too chatty.
 
 ## Develop
 
