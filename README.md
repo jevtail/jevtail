@@ -75,6 +75,17 @@ done
 bun run worker:deploy                     # prints https://jevtail.<you>.workers.dev
 ```
 
+### macOS server (launchd) and pull sources
+
+Already running services on a Mac mini? Tail their log files and containers directly, no
+drains needed, and poll free-tier Supabase through the Management API. See
+[deploy/README.md](deploy/README.md).
+
+```bash
+JEVTAIL_TAIL="api=/srv/api/logs/server.log" JEVTAIL_DOCKER="backend,worker" \
+SUPABASE_ACCESS_TOKEN=sbp_... SUPABASE_PROJECTS=ref1 bun run dev
+```
+
 ### Local
 
 ```bash
@@ -133,8 +144,8 @@ An alert fires when `needs_human >= 0.7` or `severity >= 2` (major). Tune
 packages/core       Event model, template mining, Jev client, SQLite store (bun:sqlite | D1), pipeline
 packages/receivers  sentry · vercel · supabase · generic     (one pure function each)
 packages/sinks      telegram · slack/discord webhook · stdout
-apps/server         Hono app + Bun entry + Workers entry
-deploy/             Dockerfile, docker-compose, wrangler.toml
+apps/server         Hono app + Bun entry (+ tail / docker / Supabase pull sources) + Workers entry
+deploy/             Dockerfile, docker-compose, wrangler.toml, launchd plist, deploy guide
 ```
 
 Adding a receiver is one function that maps a payload to `Event[]` and one line in `RECEIVERS`.

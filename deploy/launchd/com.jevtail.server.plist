@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<!-- macOS self-host: ~/services/jevtail/{app,.env,logs}. Install:
+     cp deploy/launchd/com.jevtail.server.plist ~/Library/LaunchAgents/ && launchctl bootstrap gui/$(id -u) ~/Library/LaunchAgents/com.jevtail.server.plist -->
+<plist version="1.0"><dict>
+  <key>Label</key><string>com.jevtail.server</string>
+  <key>ProgramArguments</key><array>
+    <string>/bin/zsh</string><string>-c</string>
+    <string>set -a; source $HOME/services/jevtail/.env; set +a; exec $HOME/.bun/bin/bun $HOME/services/jevtail/app/apps/server/src/bun.ts</string>
+  </array>
+  <key>WorkingDirectory</key><string>/Users/CHANGE_ME/services/jevtail/app</string>
+  <key>EnvironmentVariables</key><dict><key>PATH</key><string>/Users/CHANGE_ME/.bun/bin:/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin</string></dict>
+  <key>RunAtLoad</key><true/>
+  <key>KeepAlive</key><true/>
+  <key>StandardOutPath</key><string>/Users/CHANGE_ME/services/jevtail/logs/server.log</string>
+  <key>StandardErrorPath</key><string>/Users/CHANGE_ME/services/jevtail/logs/server.log</string>
+</dict></plist>
