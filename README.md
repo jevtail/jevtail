@@ -121,6 +121,34 @@ POST /mcp                                           # MCP, see below
 Every event carries its judgment, so `jq '.[] | select(.judgment.category.choice=="dependency")'`
 is your incident filter.
 
+## Root cause, without an LLM
+
+When an alert crosses the line, jevtail runs a second pass that is still only Jev: a
+decision graph, not a summary.
+
+1. Code collects the templates active in the 15 minutes around the alert, across every source.
+2. One Jev request asks three questions per candidate: same incident? plausible cause?
+   deploy / restart / config change?
+3. One more request asks, over the alert plus the strongest evidence: which root-cause class
+   (deploy, dependency, resource, traffic, external, auth, data, bug, network, unknown),
+   will it self-heal, are users affected right now.
+4. Code assembles the block from typed answers: onset time, change markers, ranked related
+   templates with cause probabilities, the hypothesis with its probability table, and a fixed
+   checklist per class. About 6k tokens, well under a cent, ~1 s.
+
+```
+why (90%): resource exhaustion (memory, disk, connections, file handles, rate limits)
+onset 05:01:07Z (5 min before) · docker:kingsick-db: LOG: database system was shut down … ready to accept connections
+related 85% cause · docker:kingsick-db: FATAL: too many connections for role "kingsick" (max 100)
+related 16% cause · docker:kingsick-scheduler: scheduler tick: 12 jobs queued, 0 running (worker pool waiting on db)
+user impact 91%
+next: 1) check memory / disk / connection pool metrics  2) look for a leak: does usage grow with uptime?  3) raise the limit only after finding the consumer
+```
+
+That block is appended to every alert and stored; `jevtail_analyze` returns it to agents.
+Nothing here is generated text: the model never writes a sentence, it ranks and classifies,
+and the sentences are templates. Add an LLM later only for the narrative on top.
+
 ## Agents: MCP built in
 
 The same server speaks MCP (Streamable HTTP) at `/mcp`, so an incident agent does not need
@@ -137,6 +165,7 @@ claude mcp add --transport http jevtail https://<host>/mcp --header "Authorizati
 | `jevtail_alerts` | "What crossed the line since last night?" |
 | `jevtail_events` | filtered drill-down: source, level, category, min severity, text |
 | `jevtail_templates` / `jevtail_template` | the shape of the traffic, and one template with sample messages and links |
+| `jevtail_analyze` | root-cause analysis for a template: onset, change markers, causal candidates, hypothesis, next steps |
 | `jevtail_judge` | score log lines the agent found elsewhere, without storing them |
 | `jevtail_ingest` | push events the agent fetched from a system jevtail is not wired to |
 
