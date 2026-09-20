@@ -18,7 +18,7 @@ test("mcp: an MCP client lists tools, ingests, and reads stats/alerts through /m
     return new Response(JSON.stringify({ answers, usage: { input_tokens: 100 } }), { status: 200 });
   }) as any;
   const store = await bunSqlite(":memory:");
-  const app = createApp({ store, env: { TYPESAFE_API_KEY: "k", JEVTAIL_TOKEN: "s3cret" } as any, fetchImpl: fakeJev, sinks: [async () => {}] });
+  const app = createApp({ store, env: { TYPESAFE_API_KEY: "k", JEVTAIL_TOKEN: "s3cret", JEVTAIL_ANALYZE: "0" } as any, fetchImpl: fakeJev, sinks: [async () => {}] });
   const appFetch = ((input: any, init?: any) => app.request(input, init)) as typeof fetch;
 
   const denied = await app.request("/mcp", { method: "POST", body: "{}" });

@@ -4,10 +4,10 @@
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { StreamableHTTPTransport } from "@hono/mcp";
 import { z } from "zod";
-import { listEvents, listAlerts, listTemplates, getTemplate, stats, flat, type Store, type JevClient, type Rules, type Event, type IngestResult } from "@jevtail/core";
+import { listEvents, listAlerts, listTemplates, getTemplate, stats, flat, renderAnalysis, type Store, type JevClient, type Rules, type Event, type IngestResult, type JudgedEvent, type Analysis } from "@jevtail/core";
 import { generic } from "@jevtail/receivers";
 
-export interface McpDeps { store: Store; jev: JevClient; rules: Rules; ingest: (events: Event[]) => Promise<IngestResult>; version?: string }
+export interface McpDeps { store: Store; jev: JevClient; rules: Rules; ingest: (events: Event[]) => Promise<IngestResult>; analyze: (a: JudgedEvent) => Promise<Analysis>; version?: string }
 
 const json = (v: unknown) => ({ content: [{ type: "text" as const, text: JSON.stringify(v, null, 2) }] });
 const sinceOf = (minutes?: number, since?: number) => since ?? Date.now() - (minutes ?? 60) * 60_000;
@@ -17,7 +17,7 @@ export function createMcpServer(d: McpDeps) {
     instructions:
       "jevtail watches logs and alerts, collapses them into templates, and has Jev (TypeSafe's System One model) judge each template: " +
       "is_failure (0-1), needs_human (0-1), severity (0 noise, 1 minor, 2 major, 3 critical), category (timeout, dependency, auth, resource, bug, deploy, security, other), security (0-1). " +
-      "Start with jevtail_stats for the situation, jevtail_alerts for what crossed the line, jevtail_events / jevtail_template to drill in, jevtail_judge to score text you found elsewhere.",
+      "Start with jevtail_stats for the situation, jevtail_alerts for what crossed the line, jevtail_analyze for the likely root cause of an alert, jevtail_events / jevtail_template to drill in, jevtail_judge to score text you found elsewhere.",
   });
 
   server.registerTool("jevtail_stats", {
@@ -50,6 +50,23 @@ export function createMcpServer(d: McpDeps) {
     description: "One template with its judgment and the most recent sample events (full messages, meta, links).",
     inputSchema: { key: z.string().describe("template key from jevtail_templates / jevtail_alerts"), samples: z.number().int().positive().max(50).default(5) },
   }, async ({ key, samples }) => json((await getTemplate(d.store, key, { samples })) ?? { error: "no such template" }));
+
+  server.registerTool("jevtail_analyze", {
+    description: "Root-cause analysis for a template, computed as a decision graph with Jev (no LLM): related/causal templates in the window, change markers, onset time, most likely cause class with probabilities, user impact, self-healing likelihood, next steps. Returns the stored analysis if one exists unless refresh=true.",
+    inputSchema: { key: z.string().describe("template key (from jevtail_alerts / jevtail_templates)"), refresh: z.boolean().default(false) },
+  }, async ({ key, refresh }) => {
+    if (!refresh) {
+      const [row] = await d.store.all<{ analysis: string }>(`SELECT analysis FROM analyses WHERE tenant = ? AND template = ?`, ["default", key]);
+      if (row) return json(JSON.parse(row.analysis));
+    }
+    const t = await getTemplate(d.store, key, { samples: 1 });
+    if (!t) return json({ error: "no such template" });
+    const sample: any = (t as any).samples?.[0];
+    if (!sample) return json({ error: "no sample event for template" });
+    const a = await d.analyze({ ...sample, template: key, judgment: sample.judgment, novel: false });
+    await d.store.exec(`INSERT OR REPLACE INTO analyses (tenant, template, ts, analysis) VALUES (?, ?, ?, ?)`, ["default", key, Date.now(), JSON.stringify(a)]);
+    return json({ ...a, summary: renderAnalysis(a, sample.ts) });
+  });
 
   server.registerTool("jevtail_judge", {
     description: "Run the Jev rules on text you have in hand (log lines, an alert body, a stack trace) without storing it. Returns typed scores per line. Costs a fraction of a cent.",

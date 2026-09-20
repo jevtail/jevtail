@@ -1,7 +1,7 @@
 // The one HTTP app. Runs unchanged on Bun (Docker) and Cloudflare Workers:
 // the runtime entry points only differ in how they build `deps`.
 import { Hono } from "hono";
-import { ingest, jevClient, validateRules, migrate, defaultShouldAlert, defaultRules, type Store, type Rules, type Event, type JudgedEvent } from "@jevtail/core";
+import { ingest, jevClient, validateRules, migrate, defaultShouldAlert, defaultRules, analyze, type Store, type Rules, type Event, type JudgedEvent } from "@jevtail/core";
 import { RECEIVERS } from "@jevtail/receivers";
 import { sinksFromEnv, type Sink } from "@jevtail/sinks";
 import { mcpHandler } from "./mcp";
@@ -17,6 +17,7 @@ export interface Env {
   TELEGRAM_BOT_TOKEN?: string; TELEGRAM_CHAT_ID?: string;
   SLACK_WEBHOOK_URL?: string; DISCORD_WEBHOOK_URL?: string; ALERT_WEBHOOK_URL?: string;
   JEVTAIL_STDOUT?: string;
+  JEVTAIL_ANALYZE?: string;        // "0" disables root-cause analysis on alerts
   // Bun-only pull sources (see sources.ts)
   JEVTAIL_TAIL?: string; JEVTAIL_DOCKER?: string; JEVTAIL_DOCKER_BIN?: string;
   SUPABASE_ACCESS_TOKEN?: string; SUPABASE_PROJECTS?: string; SUPABASE_POLL_SEC?: string;
@@ -49,10 +50,20 @@ export function createApp(deps: Deps) {
   };
 
   /** ingest from non-HTTP sources (tail, docker, pollers) with the same rules, store and sinks */
+  const analyzeAlert = async (a: JudgedEvent) => {
+    try {
+      const an = await analyze(a, { store, apiKey: env.TYPESAFE_API_KEY, fetchImpl: f });
+      await store.exec(`INSERT OR REPLACE INTO analyses (tenant, template, ts, analysis) VALUES (?, ?, ?, ?)`, [a.tenant, a.template, Date.now(), JSON.stringify(an)]);
+      a.analysis = an;
+    } catch (e) { console.error("analyze failed:", (e as Error).message); }
+  };
   const ingestEvents = async (events: Event[]) => {
     await ready;
     const r = await ingest(events, { store, jev, config });
-    if (r.alerts.length) await Promise.all(sinks.map((s) => s(r.alerts).catch((e) => console.error("sink failed:", e.message))));
+    if (r.alerts.length) {
+      if (env.JEVTAIL_ANALYZE !== "0") await Promise.all(r.alerts.map(analyzeAlert));
+      await Promise.all(sinks.map((s) => s(r.alerts).catch((e) => console.error("sink failed:", e.message))));
+    }
     return r;
   };
 
@@ -72,7 +83,7 @@ export function createApp(deps: Deps) {
   });
 
   // MCP (Streamable HTTP) for agents: same token, same data.
-  const mcp = mcpHandler({ store, jev, rules, ingest: ingestEvents });
+  const mcp = mcpHandler({ store, jev, rules, ingest: ingestEvents, analyze: (a) => analyze(a, { store, apiKey: env.TYPESAFE_API_KEY, fetchImpl: f }) });
   app.all("/mcp", async (c) => (auth(c) ? mcp(c) : c.json({ error: "bad token" }, 401)));
 
   app.get("/events", async (c) => {

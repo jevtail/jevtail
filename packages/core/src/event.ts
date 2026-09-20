@@ -13,7 +13,7 @@ export interface Event {
 export type Judgment = Record<string, JevAnswer>;
 export type JevAnswer = { type: string; noul?: number; choice?: string; score?: number; confidence?: number; probabilities?: Record<string, number> };
 
-export interface JudgedEvent extends Event { template: string; judgment?: Judgment; novel: boolean }
+export interface JudgedEvent extends Event { template: string; judgment?: Judgment; novel: boolean; analysis?: unknown }
 
 export function uid(): string {
   return crypto.randomUUID();

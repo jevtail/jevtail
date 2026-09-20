@@ -33,15 +33,20 @@ export function buildRequest(events: Pick<Event, "source" | "level" | "message" 
 
 export interface JevClient { judge(events: Event[], rules: Rules, context?: unknown): Promise<{ judgments: Judgment[]; tokens: number }> }
 
-export function jevClient(apiKey: string, f: typeof fetch = fetch, opts: { concurrency?: number } = {}): JevClient {
-  const post = async (body: unknown) => {
-    for (let attempt = 0; ; attempt++) {
-      const res = await f(ENDPOINT, { method: "POST", headers: { Authorization: `Bearer ${apiKey}`, "Content-Type": "application/json" }, body: JSON.stringify(body), signal: AbortSignal.timeout(30_000) });
-      if (res.ok) return (await res.json()) as { answers: Record<string, any>; usage?: { input_tokens: number } };
-      if ((res.status === 429 || res.status >= 500) && attempt < 3) { await new Promise((r) => setTimeout(r, 500 * 2 ** attempt)); continue; }
-      throw new Error(`TypeSafe API ${res.status}: ${(await res.text()).slice(0, 300)}`);
-    }
-  };
+export type Fetch = typeof fetch;
+
+/** POST one System One request with retries on 429/5xx. */
+export async function postSystemOne(body: unknown, apiKey: string, f: Fetch = fetch): Promise<{ answers: Record<string, any>; usage?: { input_tokens: number } }> {
+  for (let attempt = 0; ; attempt++) {
+    const res = await f(ENDPOINT, { method: "POST", headers: { Authorization: `Bearer ${apiKey}`, "Content-Type": "application/json" }, body: JSON.stringify(body), signal: AbortSignal.timeout(30_000) });
+    if (res.ok) return (await res.json()) as { answers: Record<string, any>; usage?: { input_tokens: number } };
+    if ((res.status === 429 || res.status >= 500) && attempt < 3) { await new Promise((r) => setTimeout(r, 500 * 2 ** attempt)); continue; }
+    throw new Error(`TypeSafe API ${res.status}: ${(await res.text()).slice(0, 300)}`);
+  }
+}
+
+export function jevClient(apiKey: string, f: Fetch = fetch, opts: { concurrency?: number } = {}): JevClient {
+  const post = (body: unknown) => postSystemOne(body, apiKey, f);
   return {
     async judge(events, rules, context) {
       const k = Object.keys(rules).length;

@@ -18,7 +18,7 @@ test("end to end: sentry webhook -> judged -> alert delivered to sink", async ()
   }) as any;
   const delivered: string[] = [];
   const store = await bunSqlite(":memory:");
-  const app = createApp({ store, env: { TYPESAFE_API_KEY: "k", JEVTAIL_TOKEN: "s3cret" } as any, fetchImpl, sinks: [async (as) => { for (const a of as) delivered.push(a.message); }] });
+  const app = createApp({ store, env: { TYPESAFE_API_KEY: "k", JEVTAIL_TOKEN: "s3cret", JEVTAIL_ANALYZE: "0" } as any, fetchImpl, sinks: [async (as) => { for (const a of as) delivered.push(a.message); }] });
 
   const unauth = await app.request("/in/sentry", { method: "POST", body: "{}" });
   expect(unauth.status).toBe(401);

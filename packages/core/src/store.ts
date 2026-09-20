@@ -17,6 +17,10 @@ CREATE TABLE IF NOT EXISTS templates (
   count INTEGER NOT NULL DEFAULT 0, first_ts INTEGER NOT NULL, last_ts INTEGER NOT NULL,
   judgment TEXT, judged_ts INTEGER, alerted_ts INTEGER,
   PRIMARY KEY (tenant, key)
+);
+CREATE TABLE IF NOT EXISTS analyses (
+  tenant TEXT NOT NULL, template TEXT NOT NULL, ts INTEGER NOT NULL, analysis TEXT NOT NULL,
+  PRIMARY KEY (tenant, template)
 );`;
 
 export async function migrate(store: Store) {

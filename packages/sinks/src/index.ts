@@ -1,5 +1,5 @@
 // Sinks deliver alerts. Each is (events) => Promise<void>; add one by copying.
-import { flat, type JudgedEvent } from "@jevtail/core";
+import { flat, renderAnalysis, type JudgedEvent, type Analysis } from "@jevtail/core";
 
 export type Sink = (alerts: JudgedEvent[]) => Promise<void>;
 
@@ -26,7 +26,8 @@ function parts(e: JudgedEvent): Parts {
 /** Plain text (Slack, Discord, stdout). */
 export function format(e: JudgedEvent): string {
   const p = parts(e);
-  return [`${p.icon} ${p.sev} · ${p.category} · ${p.source}${p.novel ? " · new" : ""}`, "", p.message, "", [p.facts.join(" · "), p.where].filter(Boolean).join("\n"), p.link ?? ""].filter((l, i, a) => l !== "" || (i > 0 && a[i - 1] !== "")).join("\n").trim();
+  const why = e.analysis ? ["", ...renderAnalysis(e.analysis as Analysis, e.ts)] : [];
+  return [`${p.icon} ${p.sev} · ${p.category} · ${p.source}${p.novel ? " · new" : ""}`, "", p.message, "", [p.facts.join(" · "), p.where].filter(Boolean).join("\n"), p.link ?? "", ...why].filter((l, i, a) => l !== "" || (i > 0 && a[i - 1] !== "")).join("\n").trim();
 }
 
 const esc = (s: string) => s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
@@ -42,6 +43,7 @@ export function formatTelegram(e: JudgedEvent): string {
     p.facts.length ? esc(p.facts.join(" · ")) : "",
     p.where ? esc(p.where) : "",
     p.link ? `<a href="${esc(p.link)}">open ↗</a>` : "",
+    ...(e.analysis ? ["", ...renderAnalysis(e.analysis as Analysis, e.ts).map((l, i) => (i === 0 ? `<b>${esc(l)}</b>` : esc(l)))] : []),
   ];
   return lines.filter((l, i, a) => l !== "" || (i > 0 && a[i - 1] !== "")).join("\n").trim();
 }

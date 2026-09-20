@@ -4,5 +4,6 @@ export * from "./jev";
 export * from "./store";
 export * from "./pipeline";
 export * from "./queries";
+export * from "./analyze";
 import defaultRules from "../rules/default.json";
 export { defaultRules };
